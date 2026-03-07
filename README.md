@@ -12,10 +12,15 @@ A [Dash](https://dash.plotly.com/) component wrapping [react-force-graph-2d](htt
 - **Directional arrows** — optional arrows on links for directed graphs
 - **Two-way binding** — `selectedNodes` prop syncs selection state with Dash callbacks
 
+## Demo
+
+- Example code can be found in the [NetNeighbors project](https://github.com/PeterCarragher/NetNeighbors)
+- The component is used in the [NetNeighbors webapp](https://netneighbor.petercarragher.com/)
+
 ## Installation
 
 ```bash
-pip install dash-force-graph
+pip install git+https://github.com/PeterCarragher/dash-force-graph.git
 ```
 
 ### Development install (from source)
@@ -187,21 +192,12 @@ ForceGraph(
 )
 ```
 
-## Development
+## Alternatives
 
-```bash
-# Install JS dependencies
-npm install
+- **[dash-react-force-graph](https://github.com/nodelab-org/dash-react-force-graph)** — A broader Dash wrapper around `react-force-graph`. Ports more of the upstream API surface. The authors note it was built for an internal app with no guarantees.
+- **[ipyforcegraph](https://github.com/jupyrdf/ipyforcegraph)** — A Jupyter widget (not Dash) wrapping both 2D and 3D force-graph. Great if you're working in JupyterLab/JupyterLite with pandas DataFrames, but not usable in Dash apps.
 
-# Build JS bundle (required after editing src/)
-npm run build
-
-# Watch mode (auto-rebuild on changes)
-npm run watch
-
-# Install Python package in dev mode
-pip install -e .
-```
+This package focuses on Dash-native selection workflows (click, multi-select, box-select) and large graph performance, with an opinionated but configurable prop surface.
 
 ## License
 
