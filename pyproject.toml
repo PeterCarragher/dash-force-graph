@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dash-force-graph"
+version = "0.1.0"
+description = "A Dash component wrapping react-force-graph-2d for high-performance graph visualization"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+authors = [
+    {name = "Peter Carragher"},
+]
+dependencies = [
+    "dash>=2.0.0",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Dash",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+
+[project.urls]
+Homepage = "https://github.com/PeterCarragher/dash-force-graph"
+Repository = "https://github.com/PeterCarragher/dash-force-graph"
+
+[tool.setuptools.packages.find]
+include = ["dash_force_graph*"]
+
+[tool.setuptools.package-data]
+dash_force_graph = ["bundle.js", "metadata.json"]
