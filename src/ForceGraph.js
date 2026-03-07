@@ -122,7 +122,10 @@ const ForceGraph = (props) => {
                 fg.d3Force('charge', d3.forceManyBody().strength(effectiveCharge));
 
                 if (linkDistance != null) {
-                    fg.d3Force('link', d3.forceLink().distance(linkDistance));
+                    const linkForce = fg.d3Force('link');
+                    if (linkForce) {
+                        linkForce.distance(linkDistance);
+                    }
                 }
 
                 if (collisionRadius != null) {
