@@ -34,6 +34,8 @@ class ForceGraph(Component):
     - cooldownTicks (number): Simulation ticks before stopping (default: 100).
     - centerAt (string): Node ID to center the view on.
     - zoomLevel (number): Zoom level to apply.
+    - fitView (number): Increment this counter to trigger a zoomToFit after the simulation settles.
+    - fitViewPadding (number): Padding in pixels around the graph when fitting the view (default: 20).
     - mode (string): Rendering mode — 'interactive' or 'performance' (default: 'interactive').
     - chargeStrength (number): Charge force strength (default: -50). Weakened in performance mode.
     - linkDistance (number): Target link distance (default: 30).
@@ -75,6 +77,8 @@ class ForceGraph(Component):
         cooldownTicks=Component.UNDEFINED,
         centerAt=Component.UNDEFINED,
         zoomLevel=Component.UNDEFINED,
+        fitView=Component.UNDEFINED,
+        fitViewPadding=Component.UNDEFINED,
         mode=Component.UNDEFINED,
         chargeStrength=Component.UNDEFINED,
         linkDistance=Component.UNDEFINED,
@@ -106,6 +110,8 @@ class ForceGraph(Component):
             'cooldownTicks',
             'centerAt',
             'zoomLevel',
+            'fitView',
+            'fitViewPadding',
             'mode',
             'chargeStrength',
             'linkDistance',

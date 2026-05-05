@@ -88,6 +88,12 @@
         "type": {"name": "number"},
         "required": false
       },
+      "fitView": {
+        "description": "Increment this counter to trigger a zoomToFit after the simulation settles.",
+        "type": {"name": "number"},
+        "required": false,
+        "defaultValue": {"value": "0", "computed": false}
+      },
       "mode": {
         "description": "Rendering mode: 'interactive' (full features) or 'performance' (optimized for large graphs).",
         "type": {"name": "string"},
