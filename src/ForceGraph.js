@@ -45,6 +45,7 @@ const ForceGraph = (props) => {
     const containerRef = useRef();
     const overlayRef = useRef();
     const fitOnStopRef = useRef(false);
+    const pendingFitRef = useRef(false);
     const fitPaddingRef = useRef(fitViewPadding);
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
     const [selectedSet, setSelectedSet] = useState(new Set(selectedNodes || []));
@@ -117,10 +118,10 @@ const ForceGraph = (props) => {
     // Keep padding ref current so handleEngineStop always uses the latest value
     useEffect(() => { fitPaddingRef.current = fitViewPadding; }, [fitViewPadding]);
 
-    // When fitView increments, arm the fit-on-stop flag
+    // When fitView increments, mark fit as pending — consumed when the new simulation starts
     useEffect(() => {
         if (!fitView) return;
-        fitOnStopRef.current = true;
+        pendingFitRef.current = true;
     }, [fitView]);
 
     // Configure force simulation
@@ -147,6 +148,11 @@ const ForceGraph = (props) => {
                     fg.d3Force('collision', null);
                 }
 
+                // Arm the fit-on-stop flag now that the new simulation is starting
+                if (pendingFitRef.current) {
+                    fitOnStopRef.current = true;
+                    pendingFitRef.current = false;
+                }
                 fg.d3ReheatSimulation();
             }
         }, 100);
