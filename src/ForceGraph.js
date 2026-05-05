@@ -110,6 +110,14 @@ const ForceGraph = (props) => {
         }
     }, [zoomLevel]);
 
+    const initialZoomDoneRef = useRef(false);
+    const handleEngineStop = useCallback(() => {
+        if (!initialZoomDoneRef.current && graphRef.current) {
+            initialZoomDoneRef.current = true;
+            graphRef.current.zoom(0.6, 400);
+        }
+    }, []);
+
     // Configure force simulation
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -356,6 +364,7 @@ const ForceGraph = (props) => {
                 d3VelocityDecay={effectiveVelocityDecay}
                 linkDirectionalArrowLength={linkDirectionalArrowLength}
                 linkDirectionalArrowRelPos={linkDirectionalArrowRelPos}
+                onEngineStop={handleEngineStop}
             />
             </div>
         </div>
