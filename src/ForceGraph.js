@@ -110,12 +110,34 @@ const ForceGraph = (props) => {
         }
     }, [zoomLevel]);
 
-    const initialZoomDoneRef = useRef(false);
-    const handleEngineStop = useCallback(() => {
-        if (!initialZoomDoneRef.current && graphRef.current) {
-            initialZoomDoneRef.current = true;
-            graphRef.current.zoom(0.6, 400);
+    const recenterOnStopRef = useRef(false);
+    const graphDataRef = useRef(graphData);
+    useEffect(() => { graphDataRef.current = graphData; }, [graphData]);
+
+    // Reset viewport immediately when graph data changes, then re-adjust after simulation settles
+    useEffect(() => {
+        if (!graphData.nodes.length) return;
+        recenterOnStopRef.current = true;
+        if (graphRef.current) {
+            graphRef.current.centerAt(0, 0, 0);
+            graphRef.current.zoom(0.6, 0);
         }
+    }, [graphData]);
+
+    const handleEngineStop = useCallback(() => {
+        if (!recenterOnStopRef.current || !graphRef.current) return;
+        recenterOnStopRef.current = false;
+        const nodes = graphDataRef.current.nodes;
+        if (!nodes.length) return;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        nodes.forEach(n => {
+            if (n.x !== undefined) {
+                minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+                minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+            }
+        });
+        graphRef.current.centerAt((minX + maxX) / 2, (minY + maxY) / 2, 400);
+        graphRef.current.zoom(0.6, 400);
     }, []);
 
     // Configure force simulation
