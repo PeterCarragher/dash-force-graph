@@ -237,6 +237,12 @@ const ForceGraph = (props) => {
         return node.label || node.id;
     }, []);
 
+    // Fix node position after drag by setting fx/fy (pins it in the d3 simulation)
+    const handleNodeDragEnd = useCallback((node) => {
+        node.fx = node.x;
+        node.fy = node.y;
+    }, []);
+
     // Box selection handlers on the overlay
     const handleOverlayMouseDown = useCallback((event) => {
         if (!shiftHeld) return;
@@ -373,6 +379,7 @@ const ForceGraph = (props) => {
                 linkColor={() => effectiveLinkColor}
                 linkWidth={effectiveLinkWidth}
                 onNodeClick={handleNodeClick}
+                onNodeDragEnd={handleNodeDragEnd}
                 onBackgroundClick={handleBackgroundClick}
                 onNodeRightClick={handleNodeRightClick}
                 enableZoomInteraction={enableZoom !== false}
