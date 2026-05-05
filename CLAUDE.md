@@ -2,15 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Location & Consumer App
+
+This package lives at `/home/peter/dev/open-source/dash-force-graph/`.
+
+The primary consumer is the NetNeighbors Dash app at `/home/peter/dev/apps/NetNeighborsColab/NetNeighbors/force_graph_vis.py`, which imports `from dash_force_graph import ForceGraph`.
+
 ## Build & Dev Commands
 
 ```bash
+# In /home/peter/dev/open-source/dash-force-graph/
 npm install && npm run build   # install and build bundle
 npm run watch                  # rebuild on file changes (dev)
-pip install -e .               # install Python package in editable mode
+pip install -e .               # install Python package in editable mode (run once)
 ```
 
 After any change to `src/ForceGraph.js` or `src/index.js`, run `npm run build` — the Python Dash package serves the compiled `dash_force_graph/bundle.js`, not the source.
+
+## Iterative Development Workflow
+
+1. Edit `src/ForceGraph.js`
+2. Run `npm run build` in the dash-force-graph directory
+3. Restart the NetNeighbors Dash server (`python force_graph_vis.py` in the NetNeighbors directory) — Dash caches the bundle by fingerprint, so a hard-refresh in the browser is needed after each rebuild (Ctrl+Shift+R)
+4. The `pip install -e .` editable install means Python always imports from the local source; no reinstall needed between JS rebuilds
+
+`npm run watch` can replace steps 1–2 for continuous rebuilds, but the Dash server and browser still need to be refreshed after each bundle update.
 
 ## Architecture
 

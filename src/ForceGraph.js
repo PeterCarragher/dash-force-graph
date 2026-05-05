@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import * as d3 from 'd3-force';
 
@@ -52,6 +52,14 @@ const ForceGraph = (props) => {
     const [boxEnd, setBoxEnd] = useState(null);
     const [shiftHeld, setShiftHeld] = useState(false);
 
+    // Neighbor / adjacency maps (keyed by node id and link __idx)
+    const neighborMapRef = useRef(new Map());   // nodeId -> Set<neighborId>
+    const adjacentLinksRef = useRef(new Map()); // nodeId -> Set<linkIdx>
+
+    // Graph version counter — incremented when nodes/links change, so useMemo
+    // can recompute highlights even if selectedSet reference is unchanged.
+    const [graphVersion, setGraphVersion] = useState(0);
+
     // Track shift key globally
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -80,17 +88,52 @@ const ForceGraph = (props) => {
         }
     }, [width, height]);
 
-    // Update graph data when nodes/links change
+    // Update graph data when nodes/links change; tag links with __idx so we can
+    // identify them after d3 replaces source/target with object references.
     useEffect(() => {
         const nodesCopy = (nodes || []).map(n => ({ ...n }));
-        const linksCopy = (links || []).map(l => ({ ...l }));
+        const linksCopy = (links || []).map((l, idx) => ({ ...l, __idx: idx }));
         setGraphData({ nodes: nodesCopy, links: linksCopy });
+    }, [nodes, links]);
+
+    // Build neighbor/adjacency maps from the original props (string IDs only).
+    // Also bump graphVersion so highlight memo recomputes.
+    useEffect(() => {
+        const neighborMap = new Map();
+        const adjacentLinks = new Map();
+        (nodes || []).forEach(n => {
+            neighborMap.set(n.id, new Set());
+            adjacentLinks.set(n.id, new Set());
+        });
+        (links || []).forEach((link, idx) => {
+            const src = link.source;
+            const tgt = link.target;
+            if (neighborMap.has(src)) { neighborMap.get(src).add(tgt); adjacentLinks.get(src).add(idx); }
+            if (neighborMap.has(tgt)) { neighborMap.get(tgt).add(src); adjacentLinks.get(tgt).add(idx); }
+        });
+        neighborMapRef.current = neighborMap;
+        adjacentLinksRef.current = adjacentLinks;
+        setGraphVersion(v => v + 1);
     }, [nodes, links]);
 
     // Sync selection from props (e.g. legend click from Dash)
     useEffect(() => {
         setSelectedSet(new Set(selectedNodes || []));
     }, [selectedNodes]);
+
+    // Derived highlight sets — recomputed whenever selection or graph topology changes.
+    const { highlightNodeIds, highlightLinkIndices } = useMemo(() => {
+        if (!selectedSet.size) {
+            return { highlightNodeIds: new Set(), highlightLinkIndices: new Set() };
+        }
+        const nodeIds = new Set();
+        const linkIndices = new Set();
+        selectedSet.forEach(nodeId => {
+            (neighborMapRef.current.get(nodeId) || new Set()).forEach(id => nodeIds.add(id));
+            (adjacentLinksRef.current.get(nodeId) || new Set()).forEach(idx => linkIndices.add(idx));
+        });
+        return { highlightNodeIds: nodeIds, highlightLinkIndices: linkIndices };
+    }, [selectedSet, graphVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Center on node when centerAt changes
     useEffect(() => {
@@ -218,24 +261,93 @@ const ForceGraph = (props) => {
         return node.color || nodeColor || null;
     }, [nodeColor]);
 
-    // Draw a glow ring behind selected nodes (mode='before' means default circle still renders on top)
-    const paintRing = useCallback((node, ctx) => {
-        const r = effectiveNodeRelSize * Math.sqrt(node.val || 1);
-        const color = node.color || nodeColor || '#4ecdc4';
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r * 2.2, 0, 2 * Math.PI, false);
-        ctx.fillStyle = color + '33';
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r * 1.6, 0, 2 * Math.PI, false);
-        ctx.fillStyle = color + '88';
-        ctx.fill();
-    }, [effectiveNodeRelSize, nodeColor]);
+    // Effective prop values based on mode
+    const effectiveNodeRelSize = isPerformance ? nodeRelSize * 0.67 : nodeRelSize;
+    const effectiveLinkWidth = isPerformance ? linkWidth * 0.6 : linkWidth;
+    const effectiveLinkColor = isPerformance ? 'rgba(150, 150, 150, 0.1)' : linkColor;
+    const effectiveCooldownTicks = isPerformance ? 200 : cooldownTicks;
+    const effectiveAlphaDecay = isPerformance ? 0.01 : d3AlphaDecay;
+    const effectiveVelocityDecay = isPerformance ? 0.15 : d3VelocityDecay;
 
-    // Node label
+    // Canvas object mode:
+    //   selected  → 'replace' (we draw glow ring + circle + label ourselves)
+    //   neighbor  → 'after'   (default circle drawn first, we add label on top)
+    //   otherwise → undefined (default rendering only)
+    const nodeCanvasObjectMode = useCallback((node) => {
+        if (selectedSet.has(node.id)) return 'replace';
+        if (highlightNodeIds.has(node.id)) return 'after';
+        return undefined;
+    }, [selectedSet, highlightNodeIds]);
+
+    // Canvas object: glow ring for selected, label for selected + neighbors
+    const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
+        const r = effectiveNodeRelSize * Math.sqrt(node.val || 1);
+        const isSelected = selectedSet.has(node.id);
+
+        if (isSelected) {
+            const color = node.color || nodeColor || '#4ecdc4';
+            // Outer glow
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, r * 2.2, 0, 2 * Math.PI, false);
+            ctx.fillStyle = color + '33';
+            ctx.fill();
+            // Inner glow
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, r * 1.6, 0, 2 * Math.PI, false);
+            ctx.fillStyle = color + '88';
+            ctx.fill();
+            // Replicate default circle (required in 'replace' mode)
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        // Label for selected nodes and their neighbors
+        const label = node.label || node.id || '';
+        if (label) {
+            const fontSize = Math.max(2, 10 / globalScale);
+            ctx.font = `${fontSize}px 'Space Mono', monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const textWidth = ctx.measureText(label).width;
+            const pad = 1.5 / globalScale;
+            const labelY = node.y + r + 2 / globalScale;
+            // Pill background for readability
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+            ctx.fillRect(node.x - textWidth / 2 - pad, labelY - pad, textWidth + pad * 2, fontSize + pad * 2);
+            ctx.fillStyle = isSelected ? '#111' : '#555';
+            ctx.fillText(label, node.x, labelY);
+        }
+    }, [selectedSet, highlightNodeIds, effectiveNodeRelSize, nodeColor]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Link rendering — highlight adjacent links
+    const getLinkWidth = useCallback((link) => {
+        return highlightLinkIndices.has(link.__idx)
+            ? (isPerformance ? 1.5 : 2.5)
+            : effectiveLinkWidth;
+    }, [highlightLinkIndices, isPerformance, effectiveLinkWidth]);
+
+    const getLinkColor = useCallback((link) => {
+        return highlightLinkIndices.has(link.__idx)
+            ? 'rgba(255, 210, 60, 0.9)'
+            : effectiveLinkColor;
+    }, [highlightLinkIndices, effectiveLinkColor]);
+
+    const getLinkParticles = useCallback((link) => {
+        return highlightLinkIndices.has(link.__idx) ? 4 : 0;
+    }, [highlightLinkIndices]);
+
+    const getLinkParticleWidth = useCallback((link) => {
+        return highlightLinkIndices.has(link.__idx) ? 3 : 0;
+    }, [highlightLinkIndices]);
+
+    // Node label (tooltip on hover — kept for non-highlighted nodes)
     const getNodeLabel = useCallback((node) => {
+        // Suppress tooltip for highlighted nodes since we render their label on canvas
+        if (selectedSet.has(node.id) || highlightNodeIds.has(node.id)) return '';
         return node.label || node.id;
-    }, []);
+    }, [selectedSet, highlightNodeIds]);
 
     // Fix node position after drag by setting fx/fy (pins it in the d3 simulation)
     const handleNodeDragEnd = useCallback((node) => {
@@ -322,14 +434,7 @@ const ForceGraph = (props) => {
         };
     };
 
-    // Determine effective prop values based on mode
     const effectiveEnableNodeDrag = isPerformance ? false : (enableNodeDrag !== false);
-    const effectiveNodeRelSize = isPerformance ? nodeRelSize * 0.67 : nodeRelSize;
-    const effectiveLinkWidth = isPerformance ? linkWidth * 0.6 : linkWidth;
-    const effectiveLinkColor = isPerformance ? 'rgba(150, 150, 150, 0.1)' : linkColor;
-    const effectiveCooldownTicks = isPerformance ? 200 : cooldownTicks;
-    const effectiveAlphaDecay = isPerformance ? 0.01 : d3AlphaDecay;
-    const effectiveVelocityDecay = isPerformance ? 0.15 : d3VelocityDecay;
 
     return (
         <div
@@ -372,12 +477,14 @@ const ForceGraph = (props) => {
                 height={dimensions.height}
                 autoPauseRedraw={false}
                 nodeColor={getNodeColor}
-                nodeCanvasObject={paintRing}
-                nodeCanvasObjectMode={node => selectedSet.has(node.id) ? 'before' : undefined}
+                nodeCanvasObject={nodeCanvasObject}
+                nodeCanvasObjectMode={nodeCanvasObjectMode}
                 nodeRelSize={effectiveNodeRelSize}
                 nodeLabel={getNodeLabel}
-                linkColor={() => effectiveLinkColor}
-                linkWidth={effectiveLinkWidth}
+                linkColor={getLinkColor}
+                linkWidth={getLinkWidth}
+                linkDirectionalParticles={getLinkParticles}
+                linkDirectionalParticleWidth={getLinkParticleWidth}
                 onNodeClick={handleNodeClick}
                 onNodeDragEnd={handleNodeDragEnd}
                 onBackgroundClick={handleBackgroundClick}
