@@ -87,7 +87,7 @@ const ForceGraph = (props) => {
         setGraphData({ nodes: nodesCopy, links: linksCopy });
     }, [nodes, links]);
 
-    // Sync selection from props
+    // Sync selection from props (e.g. legend click from Dash)
     useEffect(() => {
         setSelectedSet(new Set(selectedNodes || []));
     }, [selectedNodes]);
@@ -181,62 +181,56 @@ const ForceGraph = (props) => {
         let newSelected;
         if (ctrlKey || metaKey) {
             const newSet = new Set(selectedSet);
-            if (newSet.has(node.id)) {
-                newSet.delete(node.id);
-            } else {
-                newSet.add(node.id);
-            }
+            if (newSet.has(node.id)) newSet.delete(node.id);
+            else newSet.add(node.id);
             newSelected = Array.from(newSet);
         } else if (shiftKey) {
-            const newSet = new Set(selectedSet);
-            newSet.add(node.id);
-            newSelected = Array.from(newSet);
+            newSelected = Array.from(new Set([...selectedSet, node.id]));
         } else {
             newSelected = [node.id];
         }
 
         setSelectedSet(new Set(newSelected));
-        if (setProps) {
-            setProps({ selectedNodes: newSelected });
-        }
+        if (setProps) setProps({ selectedNodes: newSelected });
     }, [selectedSet, setProps]);
 
     // Background click - clear selection (only if not box selecting)
-    const handleBackgroundClick = useCallback((event) => {
+    const handleBackgroundClick = useCallback(() => {
         if (isBoxSelecting) return;
         setSelectedSet(new Set());
-        if (setProps) {
-            setProps({ selectedNodes: [] });
-        }
+        if (setProps) setProps({ selectedNodes: [] });
     }, [setProps, isBoxSelecting]);
 
     // Right-click handler for context menu
     const handleNodeRightClick = useCallback((node, event) => {
         if (!node) return;
-        if (event?.preventDefault) {
-            event.preventDefault();
-        }
+        if (event?.preventDefault) event.preventDefault();
         if (setProps) {
             setProps({
                 rightClickedNode: node.id,
-                rightClickPosition: {
-                    x: event?.clientX || 0,
-                    y: event?.clientY || 0
-                }
+                rightClickPosition: { x: event?.clientX || 0, y: event?.clientY || 0 }
             });
         }
     }, [setProps]);
 
-    // Node color function
+    // Node color — always use node's own color; glow ring handles selection highlight
     const getNodeColor = useCallback((node) => {
-        if (selectedSet.has(node.id)) {
-            return selectedColor;
-        }
-        if (node.color) {
-            return node.color;
-        }
-        return nodeColor || null;
-    }, [selectedSet, selectedColor, nodeColor]);
+        return node.color || nodeColor || null;
+    }, [nodeColor]);
+
+    // Draw a glow ring behind selected nodes (mode='before' means default circle still renders on top)
+    const paintRing = useCallback((node, ctx) => {
+        const r = effectiveNodeRelSize * Math.sqrt(node.val || 1);
+        const color = node.color || nodeColor || '#4ecdc4';
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r * 2.2, 0, 2 * Math.PI, false);
+        ctx.fillStyle = color + '33';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r * 1.6, 0, 2 * Math.PI, false);
+        ctx.fillStyle = color + '88';
+        ctx.fill();
+    }, [effectiveNodeRelSize, nodeColor]);
 
     // Node label
     const getNodeLabel = useCallback((node) => {
@@ -370,7 +364,10 @@ const ForceGraph = (props) => {
                 graphData={graphData}
                 width={dimensions.width}
                 height={dimensions.height}
+                autoPauseRedraw={false}
                 nodeColor={getNodeColor}
+                nodeCanvasObject={paintRing}
+                nodeCanvasObjectMode={node => selectedSet.has(node.id) ? 'before' : undefined}
                 nodeRelSize={effectiveNodeRelSize}
                 nodeLabel={getNodeLabel}
                 linkColor={() => effectiveLinkColor}
