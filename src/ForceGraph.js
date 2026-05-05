@@ -23,8 +23,6 @@ const ForceGraph = (props) => {
         cooldownTicks,
         centerAt,
         zoomLevel,
-        fitView,
-        fitViewPadding,
         mode,
         chargeStrength,
         linkDistance,
@@ -44,8 +42,6 @@ const ForceGraph = (props) => {
     const graphRef = useRef();
     const containerRef = useRef();
     const overlayRef = useRef();
-    const fitOnStopRef = useRef(false);
-    const fitPaddingRef = useRef(fitViewPadding);
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
     const [selectedSet, setSelectedSet] = useState(new Set(selectedNodes || []));
     const [dimensions, setDimensions] = useState({ width: width || 800, height: height || 600 });
@@ -113,15 +109,6 @@ const ForceGraph = (props) => {
             graphRef.current.zoom(zoomLevel, 300);
         }
     }, [zoomLevel]);
-
-    // Keep padding ref current so handleEngineStop always uses the latest value
-    useEffect(() => { fitPaddingRef.current = fitViewPadding; }, [fitViewPadding]);
-
-    // When fitView increments, arm the fit-on-stop flag
-    useEffect(() => {
-        if (!fitView) return;
-        fitOnStopRef.current = true;
-    }, [fitView]);
 
     // Configure force simulation
     useEffect(() => {
@@ -209,25 +196,6 @@ const ForceGraph = (props) => {
             });
         }
     }, [setProps]);
-
-    const handleEngineStop = useCallback(() => {
-        if (!fitOnStopRef.current || !graphRef.current) return;
-        fitOnStopRef.current = false;
-        const fg = graphRef.current;
-        const nodes = fg.graphData().nodes;
-        if (nodes.length === 0) return;
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        nodes.forEach(n => {
-            if (n.x !== undefined) {
-                minX = Math.min(minX, n.x);
-                maxX = Math.max(maxX, n.x);
-                minY = Math.min(minY, n.y);
-                maxY = Math.max(maxY, n.y);
-            }
-        });
-        fg.centerAt((minX + maxX) / 2, (minY + maxY) / 2, 0);
-        fg.zoomToFit(400, fitPaddingRef.current);
-    }, []);
 
     // Node color function
     const getNodeColor = useCallback((node) => {
@@ -388,7 +356,6 @@ const ForceGraph = (props) => {
                 d3VelocityDecay={effectiveVelocityDecay}
                 linkDirectionalArrowLength={linkDirectionalArrowLength}
                 linkDirectionalArrowRelPos={linkDirectionalArrowRelPos}
-                onEngineStop={handleEngineStop}
             />
             </div>
         </div>
@@ -410,8 +377,6 @@ ForceGraph.defaultProps = {
     d3AlphaDecay: 0.0228,
     d3VelocityDecay: 0.4,
     nodeRelSize: 6,
-    fitView: 0,
-    fitViewPadding: 20,
     selectedColor: '#ffd93d',
     linkColor: 'rgba(150, 150, 150, 0.2)',
     linkWidth: 0.5,
