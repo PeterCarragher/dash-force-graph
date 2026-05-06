@@ -34,6 +34,7 @@ const ForceGraph = (props) => {
         linkDirectionalArrowLength,
         linkDirectionalArrowRelPos,
         boxSelectColor,
+        showNeighborLabels,
         setProps,
     } = props;
 
@@ -269,57 +270,57 @@ const ForceGraph = (props) => {
     const effectiveAlphaDecay = isPerformance ? 0.01 : d3AlphaDecay;
     const effectiveVelocityDecay = isPerformance ? 0.15 : d3VelocityDecay;
 
-    // Canvas object mode:
-    //   selected  → 'replace' (we draw glow ring + circle + label ourselves)
-    //   neighbor  → 'after'   (default circle drawn first, we add label on top)
-    //   otherwise → undefined (default rendering only)
+    // Canvas object mode: selected nodes get 'before' so the glow ring is drawn
+    // underneath the default circle. Labels are in onRenderFramePost so they
+    // always appear on top of every node circle regardless of draw order.
     const nodeCanvasObjectMode = useCallback((node) => {
-        if (selectedSet.has(node.id)) return 'replace';
-        if (highlightNodeIds.has(node.id)) return 'after';
+        if (selectedSet.has(node.id)) return 'before';
         return undefined;
-    }, [selectedSet, highlightNodeIds]);
+    }, [selectedSet]);
 
-    // Canvas object: glow ring for selected, label for selected + neighbors
-    const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
+    // Canvas object: glow ring only, drawn before the default circle
+    const nodeCanvasObject = useCallback((node, ctx) => {
         const r = effectiveNodeRelSize * Math.sqrt(node.val || 1);
-        const isSelected = selectedSet.has(node.id);
+        const color = node.color || nodeColor || '#4ecdc4';
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r * 2.2, 0, 2 * Math.PI, false);
+        ctx.fillStyle = color + '33';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r * 1.6, 0, 2 * Math.PI, false);
+        ctx.fillStyle = color + '88';
+        ctx.fill();
+    }, [selectedSet, effectiveNodeRelSize, nodeColor]); // eslint-disable-line react-hooks/exhaustive-deps
 
-        if (isSelected) {
-            const color = node.color || nodeColor || '#4ecdc4';
-            // Outer glow
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, r * 2.2, 0, 2 * Math.PI, false);
-            ctx.fillStyle = color + '33';
-            ctx.fill();
-            // Inner glow
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, r * 1.6, 0, 2 * Math.PI, false);
-            ctx.fillStyle = color + '88';
-            ctx.fill();
-            // Replicate default circle (required in 'replace' mode)
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
-            ctx.fillStyle = color;
-            ctx.fill();
-        }
+    // Post-render pass: draw all labels after every node circle has been painted
+    // so labels are never obscured by nodes drawn later in the same frame.
+    const handleRenderFramePost = useCallback((ctx, globalScale) => {
+        const nodes = graphDataRef.current.nodes;
+        const fontSize = Math.max(2, 10 / globalScale);
+        ctx.font = `${fontSize}px 'Space Mono', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
 
-        // Label for selected nodes and their neighbors
-        const label = node.label || node.id || '';
-        if (label) {
-            const fontSize = Math.max(2, 10 / globalScale);
-            ctx.font = `${fontSize}px 'Space Mono', monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
+        nodes.forEach(node => {
+            const isSelected = selectedSet.has(node.id);
+            const isNeighbor = showNeighborLabels && highlightNodeIds.has(node.id);
+            if (!isSelected && !isNeighbor) return;
+            if (node.x === undefined || node.y === undefined) return;
+
+            const label = node.label || node.id || '';
+            if (!label) return;
+
+            const r = effectiveNodeRelSize * Math.sqrt(node.val || 1);
             const textWidth = ctx.measureText(label).width;
             const pad = 1.5 / globalScale;
             const labelY = node.y + r + 2 / globalScale;
-            // Pill background for readability
+
             ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
             ctx.fillRect(node.x - textWidth / 2 - pad, labelY - pad, textWidth + pad * 2, fontSize + pad * 2);
             ctx.fillStyle = isSelected ? '#111' : '#555';
             ctx.fillText(label, node.x, labelY);
-        }
-    }, [selectedSet, highlightNodeIds, effectiveNodeRelSize, nodeColor]); // eslint-disable-line react-hooks/exhaustive-deps
+        });
+    }, [selectedSet, highlightNodeIds, showNeighborLabels, effectiveNodeRelSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Link rendering — highlight adjacent links
     const getLinkWidth = useCallback((link) => {
@@ -344,10 +345,10 @@ const ForceGraph = (props) => {
 
     // Node label (tooltip on hover — kept for non-highlighted nodes)
     const getNodeLabel = useCallback((node) => {
-        // Suppress tooltip for highlighted nodes since we render their label on canvas
-        if (selectedSet.has(node.id) || highlightNodeIds.has(node.id)) return '';
+        if (selectedSet.has(node.id)) return '';
+        if (showNeighborLabels && highlightNodeIds.has(node.id)) return '';
         return node.label || node.id;
-    }, [selectedSet, highlightNodeIds]);
+    }, [selectedSet, highlightNodeIds, showNeighborLabels]);
 
     // Fix node position after drag by setting fx/fy (pins it in the d3 simulation)
     const handleNodeDragEnd = useCallback((node) => {
@@ -498,6 +499,7 @@ const ForceGraph = (props) => {
                 linkDirectionalArrowLength={linkDirectionalArrowLength}
                 linkDirectionalArrowRelPos={linkDirectionalArrowRelPos}
                 onEngineStop={handleEngineStop}
+                onRenderFramePost={handleRenderFramePost}
             />
             </div>
         </div>
@@ -525,6 +527,7 @@ ForceGraph.defaultProps = {
     linkDirectionalArrowLength: 0,
     linkDirectionalArrowRelPos: 0.5,
     boxSelectColor: '#1a73e8',
+    showNeighborLabels: false,
 };
 
 export default ForceGraph;

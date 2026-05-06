@@ -88,6 +88,7 @@ class ForceGraph(Component):
         boxSelectColor=Component.UNDEFINED,
         rightClickedNode=Component.UNDEFINED,
         rightClickPosition=Component.UNDEFINED,
+        showNeighborLabels=Component.UNDEFINED,
         **kwargs
     ):
         self._prop_names = [
@@ -119,6 +120,7 @@ class ForceGraph(Component):
             'boxSelectColor',
             'rightClickedNode',
             'rightClickPosition',
+            'showNeighborLabels',
         ]
         self._valid_wildcard_attributes = []
         self.available_properties = list(self._prop_names)
