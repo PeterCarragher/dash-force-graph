@@ -34,6 +34,7 @@ const ForceGraph = (props) => {
         linkDirectionalArrowLength,
         linkDirectionalArrowRelPos,
         linkDirectionalParticleSpeed,
+        linkDirectionalParticleWidth,
         boxSelectColor,
         showNeighborLabels,
         labelFontSize,
@@ -393,10 +394,6 @@ const ForceGraph = (props) => {
         return highlightLinkIndices.has(link.__idx) ? 4 : 0;
     }, [highlightLinkIndices]);
 
-    const getLinkParticleWidth = useCallback((link) => {
-        return highlightLinkIndices.has(link.__idx) ? 12 : 0;
-    }, [highlightLinkIndices]);
-
     // Node label (tooltip on hover — kept for non-highlighted nodes)
     const getNodeLabel = useCallback((node) => {
         if (selectedSet.has(node.id)) return '';
@@ -539,7 +536,7 @@ const ForceGraph = (props) => {
                 linkColor={getLinkColor}
                 linkWidth={getLinkWidth}
                 linkDirectionalParticles={getLinkParticles}
-                linkDirectionalParticleWidth={getLinkParticleWidth}
+                linkDirectionalParticleWidth={linkDirectionalParticleWidth}
                 linkDirectionalParticleSpeed={linkDirectionalParticleSpeed}
                 onNodeClick={handleNodeClick}
                 onNodeDragEnd={handleNodeDragEnd}
@@ -582,6 +579,7 @@ ForceGraph.defaultProps = {
     linkDirectionalArrowLength: 0,
     linkDirectionalArrowRelPos: 0.5,
     linkDirectionalParticleSpeed: 0.009,
+    linkDirectionalParticleWidth: 8,
     boxSelectColor: '#1a73e8',
     showNeighborLabels: false,
     labelFontSize: 10,
