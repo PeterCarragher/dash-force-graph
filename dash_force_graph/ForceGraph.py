@@ -47,6 +47,9 @@ class ForceGraph(Component):
     - boxSelectColor (string): Color for box selection rectangle (default: '#1a73e8').
     - rightClickedNode (string): ID of the last right-clicked node (read-only).
     - rightClickPosition (dict): Position {x, y} of the last right-click (read-only).
+    - labelFontSize (number): Base font size for node labels in graph units (default: 10).
+        Larger values make labels bigger on screen regardless of zoom level.
+    - fitView (boolean): When changed to True, zoom the graph to fit all nodes in view.
     """
 
     _children_props = []
@@ -89,6 +92,8 @@ class ForceGraph(Component):
         rightClickedNode=Component.UNDEFINED,
         rightClickPosition=Component.UNDEFINED,
         showNeighborLabels=Component.UNDEFINED,
+        labelFontSize=Component.UNDEFINED,
+        fitView=Component.UNDEFINED,
         **kwargs
     ):
         self._prop_names = [
@@ -121,6 +126,8 @@ class ForceGraph(Component):
             'rightClickedNode',
             'rightClickPosition',
             'showNeighborLabels',
+            'labelFontSize',
+            'fitView',
         ]
         self._valid_wildcard_attributes = []
         self.available_properties = list(self._prop_names)

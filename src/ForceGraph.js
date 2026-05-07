@@ -35,6 +35,8 @@ const ForceGraph = (props) => {
         linkDirectionalArrowRelPos,
         boxSelectColor,
         showNeighborLabels,
+        labelFontSize,
+        fitView,
         setProps,
     } = props;
 
@@ -154,15 +156,52 @@ const ForceGraph = (props) => {
         }
     }, [zoomLevel]);
 
+    // Fit all nodes into view (used by presenter mode); delay lets CSS layout settle first
+    useEffect(() => {
+        if (!fitView || !graphRef.current) return;
+        const timer = setTimeout(() => {
+            if (!graphRef.current) return;
+            if (containerRef.current) {
+                const rect = containerRef.current.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    setDimensions({ width: rect.width, height: rect.height });
+                }
+            }
+            graphRef.current.zoomToFit(400, 40, node => {
+            const neighbors = neighborMapRef.current.get(node.id);
+            return neighbors !== undefined && neighbors.size > 0;
+        });
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [fitView]);
+
     const recenterOnStopRef = useRef(false);
     const graphDataRef = useRef(graphData);
     useEffect(() => { graphDataRef.current = graphData; }, [graphData]);
+    const fitViewRef = useRef(fitView);
+    useEffect(() => { fitViewRef.current = fitView; }, [fitView]);
 
-    // Reset viewport immediately when graph data changes, then re-adjust after simulation settles
+    // Track whether the latest graphData change is a pure filter/hide (no new node IDs)
+    // vs a structural change (new nodes appeared). Must run before the reset-view and
+    // force-config effects so they can read the flag synchronously.
+    const prevNodeIdsRef = useRef(new Set());
+    const isFilterChangeRef = useRef(false);
+    useEffect(() => {
+        const prevIds = prevNodeIdsRef.current;
+        isFilterChangeRef.current = prevIds.size > 0 && graphData.nodes.every(n => prevIds.has(n.id));
+        prevNodeIdsRef.current = new Set(graphData.nodes.map(n => n.id));
+    }, [graphData]);
+
+    // Reset viewport when graph data changes.
+    // In presenter mode: always delegate to handleEngineStop for a single clean zoomToFit.
+    // For filter changes the simulation alpha is already near 0, so onEngineStop fires
+    // almost immediately (no node movement, no double-transition).
+    // In normal mode: reset camera immediately; handleEngineStop re-centers after simulation.
     useEffect(() => {
         if (!graphData.nodes.length) return;
         recenterOnStopRef.current = true;
-        if (graphRef.current) {
+        if (!graphRef.current) return;
+        if (!fitViewRef.current) {
             graphRef.current.centerAt(0, 0, 0);
             graphRef.current.zoom(0.6, 0);
         }
@@ -173,19 +212,28 @@ const ForceGraph = (props) => {
         recenterOnStopRef.current = false;
         const nodes = graphDataRef.current.nodes;
         if (!nodes.length) return;
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        nodes.forEach(n => {
-            if (n.x !== undefined) {
-                minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
-                minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
-            }
-        });
-        graphRef.current.centerAt((minX + maxX) / 2, (minY + maxY) / 2, 400);
-        graphRef.current.zoom(0.6, 400);
+        if (fitViewRef.current) {
+            graphRef.current.zoomToFit(400, 40, node => {
+                const neighbors = neighborMapRef.current.get(node.id);
+                return neighbors !== undefined && neighbors.size > 0;
+            });
+        } else {
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            nodes.forEach(n => {
+                if (n.x !== undefined) {
+                    minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+                    minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+                }
+            });
+            graphRef.current.centerAt((minX + maxX) / 2, (minY + maxY) / 2, 400);
+            graphRef.current.zoom(0.6, 400);
+        }
     }, []);
 
     // Configure force simulation
     useEffect(() => {
+        // Capture filter-change flag at effect setup time (before the async timer).
+        const filterChange = isFilterChangeRef.current;
         const timer = setTimeout(() => {
             if (graphRef.current) {
                 const fg = graphRef.current;
@@ -208,7 +256,12 @@ const ForceGraph = (props) => {
                     fg.d3Force('collision', null);
                 }
 
-                fg.d3ReheatSimulation();
+                // Skip reheat for pure filter/hide changes — nodes already have stable
+                // positions in force-graph's internal cache. Reheating would cause them
+                // to drift away from the viewport before handleEngineStop can re-fit.
+                if (!filterChange) {
+                    fg.d3ReheatSimulation();
+                }
             }
         }, 100);
         return () => clearTimeout(timer);
@@ -296,7 +349,7 @@ const ForceGraph = (props) => {
     // so labels are never obscured by nodes drawn later in the same frame.
     const handleRenderFramePost = useCallback((ctx, globalScale) => {
         const nodes = graphDataRef.current.nodes;
-        const fontSize = Math.max(2, 10 / globalScale);
+        const fontSize = Math.max(2, (labelFontSize || 10) / globalScale);
         ctx.font = `${fontSize}px 'Space Mono', monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
@@ -320,7 +373,7 @@ const ForceGraph = (props) => {
             ctx.fillStyle = isSelected ? '#111' : '#555';
             ctx.fillText(label, node.x, labelY);
         });
-    }, [selectedSet, highlightNodeIds, showNeighborLabels, effectiveNodeRelSize]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [selectedSet, highlightNodeIds, showNeighborLabels, effectiveNodeRelSize, labelFontSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Link rendering — highlight adjacent links
     const getLinkWidth = useCallback((link) => {
@@ -528,6 +581,8 @@ ForceGraph.defaultProps = {
     linkDirectionalArrowRelPos: 0.5,
     boxSelectColor: '#1a73e8',
     showNeighborLabels: false,
+    labelFontSize: 10,
+    fitView: false,
 };
 
 export default ForceGraph;
